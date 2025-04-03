@@ -11,8 +11,6 @@ from dicewars.game import Game
 from dicewars.player import AgressivePlayer, RandomPlayer
 from playergroupX import Player  # Import the agent
 
-print(tf.__version__)
-
 # Hyperparameters
 GAMMA = 0.95
 LEARNING_RATE = 0.001
@@ -96,8 +94,7 @@ class DQNAgent:
         return valid_actions[np.argmax(masked_q_values)]
 
 
-def simple_state(match_state):
-    from_player = match_state.player  # the index of the current player
+def simple_state(match_state, from_player):
     num_dice = match_state.player_num_dice
     my_dice = num_dice[from_player]
     others = np.delete(np.array(num_dice), from_player)
@@ -149,10 +146,12 @@ agent = DQNAgent(state_size, action_size)
 
 for episode in range(EPISODES):
     match = Match(Game(num_seats=4))
-    state = simple_state(match.state)
+    player = match.player
+    state = simple_state(match.state, player)
     full_state = match.state
     done = False
     while not done:
+        player = match.player
         valid_actions = get_valid_actions(match.game.grid, match.state)
         action = agent.act(state, valid_actions)
         grid, new_state = match.step(action)
@@ -161,7 +160,7 @@ for episode in range(EPISODES):
         reward = reward_state(full_state, full_new_state)
         done = new_state.winner != -1
 
-        next_state = simple_state(new_state)
+        next_state = simple_state(new_state, player)
         valid_actions_next = get_valid_actions(match.game.grid, new_state)
 
         agent.remember(state, action, reward, next_state, done, valid_actions_next)
