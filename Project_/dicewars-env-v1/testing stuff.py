@@ -3,19 +3,46 @@ from dicewars.match import Match
 from dicewars.game import Game
 from dicewars.player import AgressivePlayer, RandomPlayer
 from playergroupX import Player  # Import the agent
+import matplotlib.pyplot as plt
+from IPython.display import clear_output
+import numpy as np
+
+plt.ion()  # Turn on interactive mode
+fig, ax = plt.subplots()
+line, = ax.plot([], [], label="Training Loss")
+ax.set_xlabel("Actions")
+ax.set_ylabel("Loss")
+ax.set_yscale('log')
+ax.set_title("DQN Loss over Time")
+ax.grid(True)
+ax.legend()
+
+
+def update_plot(loss_history):
+    line.set_xdata(np.arange(len(loss_history))*TRAIN_AFTER_ACTIONS)
+    line.set_ydata(loss_history)
+    ax.relim()
+    ax.autoscale_view()
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+
+losses = []
 
 # Hyperparameters
 GAMMA = 0.95
-LEARNING_RATE = 0.001
-MEMORY_SIZE = 2000
+LEARNING_RATE = 0.01
+MEMORY_SIZE = 10000
 BATCH_SIZE = 32
 EPISODES = 100
-EPSILON = 1  # Exploration factor
+EPSILON = 0  # Exploration factor
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.9
+EPSILON_DECAY = 0.99
+TRAIN_AFTER_ACTIONS = 8
+UPDATE_TARGET = 1000
+steps = 0
 
-RENDER = True
-
+RENDER = False
 
 game_history = []
 
@@ -23,13 +50,13 @@ game_history = []
 game = Game(num_seats=4)
 match = Match(game)
 
-
-state_size = 210  #simplest state, number of dice per player
+state_size = 210  # simplest state, number of dice per player
 action_size = len(game.area_num_dice) ** 2  # Assuming all possible (from, to) moves
 
-agent = Player(state_size=state_size, action_size= action_size, MEMORY_SIZE= MEMORY_SIZE, EPSILON = EPSILON, LEARNING_RATE = LEARNING_RATE, BATCH_SIZE = BATCH_SIZE, GAMMA = GAMMA, EPSILON_MIN = EPSILON_MIN, EPSILON_DECAY = EPSILON_DECAY)  # Our DQN player
+agent = Player(state_size=state_size, action_size=action_size, MEMORY_SIZE=MEMORY_SIZE, EPSILON=EPSILON,
+               LEARNING_RATE=LEARNING_RATE, BATCH_SIZE=BATCH_SIZE, GAMMA=GAMMA, EPSILON_MIN=EPSILON_MIN,
+               EPSILON_DECAY=EPSILON_DECAY)  # Our DQN player
 players = [agent, AgressivePlayer(), AgressivePlayer(), AgressivePlayer()]
-
 
 for episode in range(EPISODES):
     match = Match(game)
@@ -39,10 +66,12 @@ for episode in range(EPISODES):
 
     total_reward = 0
 
-    while not done and match.player != -1 and match.player_num_dice[0]>0:
+    while not done and match.player != -1 and match.player_num_dice[0] > 0:
+
         player = match.player
         current_player = players[player]
         if player == 0:
+            steps += 1
             action = agent.get_attack_areas(match.game.grid, match.state)
 
             grid, new_state = match.step(action)
@@ -56,6 +85,18 @@ for episode in range(EPISODES):
             state = new_state
 
             total_reward += reward
+
+            if steps % TRAIN_AFTER_ACTIONS == 0 and steps > BATCH_SIZE:
+                loss = agent.replay()
+
+                if loss is not None:
+                    losses.append(loss)
+                    if len(losses) % 50 == 0:
+                        update_plot(losses)
+
+            if steps % UPDATE_TARGET == 0:
+                agent.update_target()
+
         else:
             action = current_player.get_attack_areas(match.game.grid, state)
 
@@ -64,10 +105,9 @@ for episode in range(EPISODES):
         if RENDER:
             match.render()
 
-    agent.replay()
-
     game_history.append(match.state)
-    print(f"Episode {episode + 1}/{EPISODES} - Epsilon: {agent.epsilon:.2f} \n Reward: {total_reward} \n")
+    print(
+        f"Episode {episode + 1}/{EPISODES} - Epsilon: {agent.epsilon:.2f} \n Reward: {total_reward} | Steps {steps} \n")
 
 agent.model.save("dqn_model.keras")
 # Save to a file

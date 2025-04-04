@@ -1,8 +1,10 @@
 import keras.src.saving.saving_lib
 from dicewars import player
 from random import choice
+
 import random
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from collections import deque
@@ -47,8 +49,7 @@ class Player(player.Player):
         """
         model = keras.Sequential([
             Dense(100, input_dim=self.state_size, activation="relu"),
-            Dense(300, activation="relu"),
-            Dense(600, activation="relu"),
+            Dense(400, activation="relu"),
             Dense(self.action_size, activation="linear")
         ])
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
@@ -65,39 +66,60 @@ class Player(player.Player):
 
 
     def update_target(self):
-        self.target.set_weights(self.model.get_weights)
+        self.target.set_weights(self.model.get_weights())
 
     def replay(self):
         """ Train the model using replay memory. """
+        if len(self.memory) < self.batch_size:
+            return
 
         losses = []
 
         minibatch = random.sample(self.memory, self.batch_size)
-        for state, action, reward, next_state, done, valid_actions_next in minibatch:
-            target = reward
-            if not done:
-                next_q_values = self.model.predict(np.array([next_state]), verbose=0)[0]
-                masked_q_values = np.full(self.action_size, -np.inf)
-                next_valid_action_idxs = self.actions_to_idxs(valid_actions_next)
-                masked_q_values[next_valid_action_idxs] = next_q_values[next_valid_action_idxs]
-                target += self.gamma * np.max(masked_q_values)
 
-            target_f = self.model.predict(np.array([state]), verbose=0)[0]
-            action_idx = self.action_to_idx(action)
-            target_old = target_f[action_idx]
-            target_f[action_idx] = target
+        # Unpack batch elements
+        states = np.array([x[0] for x in minibatch])
+        actions = np.array([self.action_to_idx(x[1]) for x in minibatch])
+        rewards = np.array([x[2] for x in minibatch], dtype=np.float32)
+        next_states = np.array([x[3] for x in minibatch])
+        dones = np.array([x[4] for x in minibatch], dtype=np.float32)
+        dones = dones != -1 #this should also include whether player has been eliminated?
+        valid_actions_next = [x[5] for x in minibatch]  # list of lists
 
-            # Compute loss manually (MSE between target and prediction for selected action)
-            loss = (target - target_old) ** 2
-            losses.append(loss)
+        # Predict future rewards from target network
+        future_rewards = self.target.predict(next_states, verbose=0)
 
-            self.model.fit(np.array([state]), np.array([target_f]), epochs=1, verbose=0)
+        # Apply action masking
+        masked_future_rewards = np.full_like(future_rewards, -np.inf)
+        for i in range(self.batch_size):
+            valid_idxs = self.actions_to_idxs(valid_actions_next[i])
+            masked_future_rewards[i, valid_idxs] = future_rewards[i, valid_idxs]
 
+        max_next_qs = np.max(masked_future_rewards, axis=1)
+
+        # Compute Q values: Q = reward + gamma * max(Q_next) and set to -1 if done
+        updated_qs = rewards + self.gamma * max_next_qs * (1 - dones)
+
+        # Predict current Q-values
+        with tf.GradientTape() as tape:
+            q_values = self.model(states, training=True)
+
+            # Get Q-values for actions taken using one-hot masking
+            action_masks = tf.one_hot(actions, self.action_size)
+            q_action = tf.reduce_sum(q_values * action_masks, axis=1)
+
+            # Compute loss
+            loss = tf.keras.losses.MSE(updated_qs, q_action)
+
+        # Backpropagation
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
+
+        # Epsilon decay
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-        avg_loss = np.mean(losses)
-        print(f"Replay: Avg loss = {avg_loss:.4f}")
+        return tf.reduce_mean(loss).numpy()
 
     def get_valid_actions(self, grid, match_state):
         """
@@ -214,16 +236,15 @@ class Player(player.Player):
         return idxs
 
     def reward_state(self, old_state, new_state):
-        reward = 1
-        player = old_state.player
-        old_dice = old_state.player_num_dice[player]
-        new_dice = new_state.player_num_dice[player]
-        if new_dice - old_dice > 0 :
-            reward += new_dice - old_dice
-
-        if new_state.winner == player and player != -1:
-            reward += 1000
-            print("Victory!")
+        reward = -0.1
+        # player = old_state.player
+        # old_dice = old_state.player_num_dice[player]
+        # new_dice = new_state.player_num_dice[player]
+        # reward += new_dice - old_dice
+        #
+        # if new_state.winner == player and player != -1:
+        #     reward += 50
+        #     print("Victory!")
         return reward
 
     def reward_function_Olga(self, old_state, new_state):
