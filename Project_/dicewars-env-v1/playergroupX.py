@@ -66,12 +66,11 @@ class Player(player.Player):
         if len(self.memory) < self.batch_size:
             return
 
-        total = 0
+        losses = []
 
         minibatch = random.sample(self.memory, self.batch_size)
         for state, action, reward, next_state, done, valid_actions_next in minibatch:
             target = reward
-            total += reward
             if not done:
                 next_q_values = self.model.predict(np.array([next_state]), verbose=0)[0]
                 masked_q_values = np.full(self.action_size, -np.inf)
@@ -80,13 +79,21 @@ class Player(player.Player):
                 target += self.gamma * np.max(masked_q_values)
 
             target_f = self.model.predict(np.array([state]), verbose=0)[0]
-            target_f[self.action_to_idx(action)] = target
+            action_idx = self.action_to_idx(action)
+            target_old = target_f[action_idx]
+            target_f[action_idx] = target
+
+            # Compute loss manually (MSE between target and prediction for selected action)
+            loss = (target - target_old) ** 2
+            losses.append(loss)
+
             self.model.fit(np.array([state]), np.array([target_f]), epochs=1, verbose=0)
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-        print(f"Avg reward: {total / len(self.memory)}")
+        avg_loss = np.mean(losses)
+        print(f"Replay: Avg loss = {avg_loss:.4f}")
 
     def get_valid_actions(self, grid, match_state):
         """
@@ -203,10 +210,13 @@ class Player(player.Player):
         return idxs
 
     def reward_state(self, old_state, new_state):
+        reward = 1
         player = old_state.player
         old_dice = old_state.player_num_dice[player]
         new_dice = new_state.player_num_dice[player]
-        reward = old_dice - new_dice
+        if new_dice - old_dice > 0 :
+            reward += new_dice - old_dice
+
         if new_state.winner == player and player != -1:
             reward += 1000
             print("Victory!")
