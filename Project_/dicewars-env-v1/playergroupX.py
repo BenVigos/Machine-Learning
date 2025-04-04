@@ -170,3 +170,36 @@ class Player(player.Player):
             reward += 1000
             print("Victory!")
         return reward
+
+    def reward_function_Olga(self, old_state, new_state):
+        player = old_state.player  # why is it old state??
+        old_dice = old_state.player_num_dice[player]
+        new_dice = new_state.player_num_dice[player]
+        new_num_adjacent = new_state.player_max_size[player]
+        old_num_adjacent = old_state.player_max_size[player]
+        new_player_areas = new_state.player_areas[i]
+        old_player_areas = old_state.player_areas[i]
+
+
+        diminishing_factor = 1   # for now don't decrease with time
+
+        # Check if the new field increases the player's adjacent 
+        if new_num_adjacent > old_num_adjacent:  
+            reward += 10 * diminishing_factor  # Extra reward for forming larger groups
+
+        # Check if you've eliminated an opponent (# of fields was not 0 and now is 0)
+        for i in range(len(0, new_state.player_num_dice)):
+            if i != from_player: 
+                if len(new_player_areas == 0) and len(old_player_areas != 0):
+                    reward += 50 * diminishing_factor
+        
+        if new_state.winner == player and player != -1:
+            reward += 1000
+            print("Victory!")
+
+
+        if new_state.player_num_dice > 0:
+            reward += 1 
+
+        return reward
+    
