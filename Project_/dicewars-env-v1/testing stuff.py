@@ -24,11 +24,11 @@ game = Game(num_seats=4)
 match = Match(game)
 
 
-state_size = 4  #simplest state, number of dice per player
+state_size = 210  #simplest state, number of dice per player
 action_size = len(game.area_num_dice) ** 2  # Assuming all possible (from, to) moves
 
-agent = Player(state_size=state_size, action_size= action_size, MEMORY_SIZE= MEMORY_SIZE, EPSILON = EPSILON, LEARNING_RATE = LEARNING_RATE, BATCH_SIZE = BATCH_SIZE, GAMMA = GAMMA, EPSILON_MIN = EPSILON_MIN, EPSILON_DECAY = EPSILON_DECAY, model="dqn_model.keras")  # Our DQN player
-players = [agent, AgressivePlayer(), RandomPlayer(), RandomPlayer()]
+agent = Player(state_size=state_size, action_size= action_size, MEMORY_SIZE= MEMORY_SIZE, EPSILON = EPSILON, LEARNING_RATE = LEARNING_RATE, BATCH_SIZE = BATCH_SIZE, GAMMA = GAMMA, EPSILON_MIN = EPSILON_MIN, EPSILON_DECAY = EPSILON_DECAY)  # Our DQN player
+players = [agent, RandomPlayer(), RandomPlayer(), RandomPlayer()]
 
 
 for episode in range(EPISODES):
@@ -50,7 +50,7 @@ for episode in range(EPISODES):
 
             valid_actions_next = agent.get_valid_actions(match.game.grid, new_state)
 
-            agent.remember(state, action, reward, new_state, done, valid_actions_next)
+            agent.remember(grid, state, action, reward, new_state, done, valid_actions_next)
             state = new_state
         else:
             action = current_player.get_attack_areas(match.game.grid, state)

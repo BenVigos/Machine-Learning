@@ -1,5 +1,4 @@
 import keras.src.saving.saving_lib
-
 from dicewars import player
 from random import choice
 import random
@@ -54,13 +53,13 @@ class Player(player.Player):
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
         return model
 
-    def remember(self, state, action, reward, next_state, done, valid_actions_next):
+    def remember(self, grid, state, action, reward, next_state, done, valid_actions_next):
         """
          Store experience in memory.
           """
         from_player = state.player
-        self.memory.append((self.simple_state(state, from_player), action, reward,
-                            self.simple_state(next_state, from_player), done, valid_actions_next))
+        self.memory.append((self.better_state(grid, state, from_player), action, reward,
+                            self.better_state(grid, next_state, from_player), done, valid_actions_next))
 
     def replay(self):
         """ Train the model using replay memory. """
@@ -122,7 +121,7 @@ class Player(player.Player):
         if np.random.rand() <= self.epsilon:
             return random.choice(valid_actions)
 
-        match_state = self.simple_state(match_state, match_state.player)
+        match_state = self.better_state(grid, match_state, match_state.player)
 
         q_values = self.model.predict(np.array([match_state]), verbose=0)[0]
         masked_q_values = np.full(self.action_size, -np.inf)
@@ -144,9 +143,51 @@ class Player(player.Player):
 
         return state
 
-    def better_state(self, match_state, from_player):
-        state = np.array([])
-        return state
+    def better_state(self, grid, match_state, from_player, max_neighbors=5):
+        import numpy as np
+
+        num_areas = len(match_state.area_players)
+        area_dice = match_state.area_num_dice
+        area_owners = match_state.area_players
+
+        # Step 1: Build raw feature list before sorting
+        raw_features = []
+
+        for area_idx in range(num_areas):
+            owner_flag = 1 if area_owners[area_idx] == from_player else -1
+            neighbors = grid.areas[area_idx].neighbors
+            sorted_neighbors = sorted(neighbors, key=lambda x: -area_dice[x])
+
+            # Pad neighbors with -1
+            padded_neighbors = sorted_neighbors[:max_neighbors]
+            while len(padded_neighbors) < max_neighbors:
+                padded_neighbors.append(-1)
+
+            raw_features.append({
+                "original_idx": area_idx,
+                "dice": area_dice[area_idx],
+                "owner": owner_flag,
+                "neighbors": padded_neighbors
+            })
+
+        # Step 2: Sort features and create new index mapping
+        sorted_features = sorted(raw_features, key=lambda x: (-x["owner"], -x["dice"]))
+        index_map = {feat["original_idx"]: i for i, feat in enumerate(sorted_features)}
+
+        # Step 3: Remap neighbors to new sorted indices
+        area_vector_list = []
+        for feat in sorted_features:
+            remapped_neighbors = [
+                index_map[n] if n in index_map else -1 for n in feat["neighbors"]
+            ]
+            area_vector_list.append([
+                feat["dice"],
+                feat["owner"],
+                *remapped_neighbors
+            ])
+
+        # Step 4: Flatten to 1D array
+        return np.array(area_vector_list, dtype=np.float32).flatten()
 
     def action_to_idx(self, action):
         if action == None:
