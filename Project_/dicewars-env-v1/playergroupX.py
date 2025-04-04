@@ -1,8 +1,10 @@
+import keras.src.saving.saving_lib
+
 from dicewars import player
 from random import choice
 import random
 import numpy as np
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from collections import deque
@@ -38,11 +40,12 @@ class Player(player.Player):
         if model == None:
             self.model = self.build_model()
         else:
-            self.epsilon = 0
-            self.model = None  # Change to load model
+            self.model = keras.src.saving.saving_lib.load_model(model)
 
     def build_model(self):
-        """ Create a simple neural network for DQN. """
+        """
+        Create a simple neural network for DQN.
+        """
         model = Sequential([
             Dense(64, input_dim=self.state_size, activation="relu"),
             Dense(64, activation="relu"),
@@ -52,7 +55,9 @@ class Player(player.Player):
         return model
 
     def remember(self, state, action, reward, next_state, done, valid_actions_next):
-        """ Store experience in memory. """
+        """
+         Store experience in memory.
+          """
         from_player = state.player
         self.memory.append((self.simple_state(state, from_player), action, reward,
                             self.simple_state(next_state, from_player), done, valid_actions_next))
@@ -67,7 +72,7 @@ class Player(player.Player):
         minibatch = random.sample(self.memory, self.batch_size)
         for state, action, reward, next_state, done, valid_actions_next in minibatch:
             target = reward
-            total+=reward
+            total += reward
             if not done:
                 next_q_values = self.model.predict(np.array([next_state]), verbose=0)[0]
                 masked_q_values = np.full(self.action_size, -np.inf)
@@ -82,7 +87,7 @@ class Player(player.Player):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-        print(f"Avg reward: {total/len(self.memory)}")
+        print(f"Avg reward: {total / len(self.memory)}")
 
     def get_valid_actions(self, grid, match_state):
         """
@@ -112,6 +117,7 @@ class Player(player.Player):
 
     def get_attack_areas(self, grid, match_state):
         """ Select an action using epsilon-greedy strategy with action masking. """
+
         valid_actions = self.get_valid_actions(grid, match_state)
         if np.random.rand() <= self.epsilon:
             return random.choice(valid_actions)
@@ -126,6 +132,10 @@ class Player(player.Player):
         return valid_actions[np.argmax(masked_q_values)]
 
     def simple_state(self, match_state, from_player):
+        """
+        Simple state representation. Only shows the total num. of dice per player.
+        "My" dice always go first and the rest are ranked from least to most
+        """
         num_dice = match_state.player_num_dice
         my_dice = num_dice[from_player]
         others = np.delete(np.array(num_dice), from_player)
@@ -151,4 +161,8 @@ class Player(player.Player):
         player = old_state.player
         old_dice = old_state.player_num_dice[player]
         new_dice = new_state.player_num_dice[player]
-        return new_dice - old_dice
+        reward = old_dice - new_dice
+        if new_state.winner == player and player != -1:
+            reward += 1000
+            print("Victory!")
+        return reward
