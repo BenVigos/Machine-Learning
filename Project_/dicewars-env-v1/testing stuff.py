@@ -14,7 +14,7 @@ EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
 EPSILON_DECAY = 0.9
 
-RENDER = False
+RENDER = True
 
 
 game_history = []
@@ -39,7 +39,7 @@ for episode in range(EPISODES):
 
     total_reward = 0
 
-    while not done and match.player != -1:
+    while not done and match.player != -1 and match.player_num_dice[0]>0:
         player = match.player
         current_player = players[player]
         if player == 0:

@@ -3,7 +3,6 @@ from dicewars import player
 from random import choice
 import random
 import numpy as np
-from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 from collections import deque
@@ -35,6 +34,7 @@ class Player(player.Player):
         self.gamma = GAMMA
         self.epsilon_min = EPSILON_MIN
         self.epsilon_decay = EPSILON_DECAY
+        self.target = self.build_model()
 
         if model == None:
             self.model = self.build_model()
@@ -45,12 +45,14 @@ class Player(player.Player):
         """
         Create a simple neural network for DQN.
         """
-        model = Sequential([
-            Dense(64, input_dim=self.state_size, activation="relu"),
-            Dense(64, activation="relu"),
+        model = keras.Sequential([
+            Dense(100, input_dim=self.state_size, activation="relu"),
+            Dense(300, activation="relu"),
+            Dense(600, activation="relu"),
             Dense(self.action_size, activation="linear")
         ])
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
+        model.summary()
         return model
 
     def remember(self, grid, state, action, reward, next_state, done, valid_actions_next):
@@ -61,10 +63,12 @@ class Player(player.Player):
         self.memory.append((self.better_state(grid, state, from_player), action, reward,
                             self.better_state(grid, next_state, from_player), done, valid_actions_next))
 
+
+    def update_target(self):
+        self.target.set_weights(self.model.get_weights)
+
     def replay(self):
         """ Train the model using replay memory. """
-        if len(self.memory) < self.batch_size:
-            return
 
         losses = []
 
