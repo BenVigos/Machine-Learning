@@ -133,7 +133,7 @@ class Player(player.Player):
 
     def simple_state(self, match_state, from_player):
         """
-        Simple state representation. Only shows the total num. of dice per player.
+        Simple state representation. Only shows the total # of dice per player.
         "My" dice always go first and the rest are ranked from least to most
         """
         num_dice = match_state.player_num_dice
@@ -142,6 +142,10 @@ class Player(player.Player):
         others = np.sort(others)
         state = np.insert(others, 0, my_dice)
 
+        return state
+
+    def better_state(self, match_state, from_player):
+        state = np.array([])
         return state
 
     def action_to_idx(self, action):
