@@ -48,8 +48,8 @@ class Player(player.Player):
         Create a simple neural network for DQN.
         """
         model = keras.Sequential([
-            Dense(100, input_dim=self.state_size, activation="relu"),
-            Dense(400, activation="relu"),
+            Dense(64, input_dim=self.state_size, activation="relu"),
+            Dense(64, activation="relu"),
             Dense(self.action_size, activation="linear")
         ])
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
@@ -109,7 +109,7 @@ class Player(player.Player):
             q_action = tf.reduce_sum(q_values * action_masks, axis=1)
 
             # Compute loss
-            loss = tf.keras.losses.MSE(updated_qs, q_action)
+            loss = tf.keras.losses.Huber()(updated_qs, q_action)
 
         # Backpropagation
         gradients = tape.gradient(loss, self.model.trainable_variables)
