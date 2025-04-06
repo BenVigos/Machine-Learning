@@ -31,10 +31,10 @@ losses = []
 
 # Hyperparameters
 GAMMA = 0.95
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0011
 MEMORY_SIZE = 10000
 BATCH_SIZE = 256
-EPISODES = 500
+EPISODES = 2000
 EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
 EPSILON_DECAY = 0.9999
@@ -45,7 +45,7 @@ steps = 0
 
 SCALE = 1
 
-DIM_FACTOR = 0.999
+DIM_FACTOR = 0.9999
 
 RENDER = False
 
@@ -170,7 +170,7 @@ for episode in range(EPISODES):
 
     SCALE *= DIM_FACTOR
 
-agent.model.save("dqn_model_1.keras")
+agent.model.save("dqn_model_2.keras")
 
 print("Training complete. Model saved!")
 
@@ -185,7 +185,7 @@ training_data = {
 }
 
 # Save to a pickle file
-with open("training_data_1.pkl", "wb") as f:
+with open("training_data_2.pkl", "wb") as f:
     pickle.dump(training_data, f)
 
 print("Training data saved!")
