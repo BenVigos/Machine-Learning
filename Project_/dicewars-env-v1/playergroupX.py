@@ -235,7 +235,7 @@ class Player(player.Player):
 
         return idxs
 
-    def reward_state(self, old_state, new_state):
+    def reward_state_old(self, old_state, new_state):
         reward = -0.1
         # player = old_state.player
         # old_dice = old_state.player_num_dice[player]
@@ -247,7 +247,7 @@ class Player(player.Player):
         #     print("Victory!")
         return reward
 
-    def reward_function_Olga(self, old_state, new_state):
+    def reward_state(self, old_state, new_state):
         player = old_state.player  # bc after you take an action it's not your turn anymore
         old_dice = old_state.player_num_dice[player]
         new_dice = new_state.player_num_dice[player]
@@ -265,13 +265,13 @@ class Player(player.Player):
             reward += 0.01 * (new_num_adjacent - old_num_adjacent) * diminishing_factor  # Extra reward for forming larger groups
 
         # Check if you've eliminated an opponent (# of fields was not 0 and now is 0)
-        for i in range(len(0, new_state.player_num_dice)):
+        for i in range(len(new_state.player_num_dice)):
             if i != player: 
-                if len(new_player_areas[i] == 0) and len(old_player_areas[i] != 0):
+                if len(new_player_areas[i]) == 0 and len(old_player_areas[i]) != 0:
                     reward += 0.2 * diminishing_factor
 
         # Check for the average number of dice per area
-        reward += (new_dice / new_player_areas) * 0.02
+        reward += (new_dice / len(new_player_areas)) * 0.02
 
 
         if new_dice > 0:
