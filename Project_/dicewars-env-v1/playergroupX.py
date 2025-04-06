@@ -1,12 +1,12 @@
-import keras.src.saving.saving_lib
+import tensorflow as tf
+from keras.src.saving import saving_lib
 from dicewars import player
 from random import choice
 
 import random
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.optimizers import Adam
+from keras.layers import Dense
+from keras.optimizers import Adam
 from collections import deque
 
 
