@@ -34,8 +34,7 @@ class Player(player.Player):
 
     def build_model(self):
         model = Sequential([
-            Dense(32, activation="relu", input_shape=(self.state_size,)),
-            Dense(32, activation="relu"),
+            Dense(64, activation="relu", input_shape=(self.state_size,)),
             Dense(self.action_size, activation="linear")
         ])
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))

@@ -92,10 +92,10 @@ GAMMA = 0.95
 LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
 BATCH_SIZE = 32
-EPISODES = 100
-EPSILON = 0  # Exploration factor
+EPISODES = 1000
+EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.999999
+EPSILON_DECAY = 0.9995
 TRAIN_AFTER_ACTIONS = 4
 UPDATE_TARGET = 1000
 MAX_STEPS = np.inf
@@ -112,6 +112,8 @@ reward_history = []
 loss_history = []
 victory_history = []
 testing_history = []
+steps_per_game = []
+
 
 
 # Training loop
@@ -123,9 +125,11 @@ action_size = 10  # Assuming all possible (from, to) moves
 
 agent = Player(state_size=state_size, action_size=action_size, MEMORY_SIZE=MEMORY_SIZE, EPSILON=EPSILON,
                LEARNING_RATE=LEARNING_RATE, BATCH_SIZE=BATCH_SIZE, GAMMA=GAMMA, EPSILON_MIN=EPSILON_MIN,
-               EPSILON_DECAY=EPSILON_DECAY)  # Our DQN player
+               EPSILON_DECAY=EPSILON_DECAY, model="dqn_model_5.keras")  # Our DQN player
 players = [agent, RandomPlayer(), RandomPlayer(), RandomPlayer()]
 
+
+min_loss = np.inf
 
 def test_agent(num_games, game=None, RENDER = False):
     wins = 0
@@ -159,6 +163,7 @@ def test_agent(num_games, game=None, RENDER = False):
 
 
 for episode in range(EPISODES):
+    # game = Game(num_seats=4)
     match = Match(game)
     player = match.player
     state = match.state
@@ -166,6 +171,8 @@ for episode in range(EPISODES):
 
     total_reward = 0
     total_loss = 0
+
+    start = steps
 
     if steps >= MAX_STEPS:
         break
@@ -217,6 +224,7 @@ for episode in range(EPISODES):
     reward_history.append(total_reward)
     game_history.append(match)
     loss_history.append(total_loss/(steps/TRAIN_AFTER_ACTIONS))
+    steps_per_game.append(steps-start)
 
     print(
         f"Episode {episode + 1}/{EPISODES} - Epsilon: {agent.epsilon:.2f} \n Reward: {total_reward} | Steps {steps} \n")
@@ -229,7 +237,28 @@ for episode in range(EPISODES):
 
     SCALE *= DIM_FACTOR
 
-agent.model.save("dqn_model_1_hidden_layer-64.keras")
+
+    if loss < min_loss:
+        min_loss = loss
+        agent.model.save("dqn_model_5.keras")
+
+    if episode % 50 == 0:
+        training_data = {
+            "game_history": game_history,
+            "reward_history": reward_history,
+            "loss_history": loss_history,
+            "victory_history": victory_history,
+            "testing_history": testing_history,
+            "losses": losses,
+            "steps_per_game": steps_per_game,
+        }
+        agent.model.save("dqn_model_5.keras")
+        min_loss = loss
+
+        with open("training_data_5_2.pkl", "wb") as f:
+            pickle.dump(training_data, f)
+
+agent.model.save("dqn_model_5.keras")
 
 print("Training complete. Model saved!")
 
@@ -241,10 +270,11 @@ training_data = {
     "victory_history": victory_history,
     "testing_history": testing_history,
     "losses": losses,
+    "steps_per_game": steps_per_game,
 }
 
 # Save to a pickle file
-with open("training_data_4.pkl", "wb") as f:
+with open("training_data_5_2.pkl", "wb") as f:
     pickle.dump(training_data, f)
 
 
