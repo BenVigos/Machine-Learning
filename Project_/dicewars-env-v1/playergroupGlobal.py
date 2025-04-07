@@ -17,7 +17,7 @@ class Player(player.Player):
     An example of a player which plays random moves is implemented here
     """
 
-    def __init__(self, state_size=None, action_size=None, MEMORY_SIZE=1, EPSILON=0, LEARNING_RATE=0, BATCH_SIZE=32,
+    def __init__(self, state_size=None, action_size=None, MEMORY_SIZE=1, EPSILON=0, LEARNING_RATE=1e-9, BATCH_SIZE=32,
                  GAMMA=0, EPSILON_MIN=0, EPSILON_DECAY=0, model=None):
         """
         do all required initialization here 
