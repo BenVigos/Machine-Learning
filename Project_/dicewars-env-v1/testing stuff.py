@@ -107,6 +107,10 @@ DIM_FACTOR = 1
 
 RENDER = False
 
+MODEL_NAME = input("Please specify model name: ")
+MODEL_FILE = f"{MODEL_NAME}.keras"
+DATA_FILE = f"training_data_{MODEL_NAME}.pkl"
+
 game_history = []
 reward_history = []
 loss_history = []
@@ -240,7 +244,7 @@ for episode in range(EPISODES):
 
     if loss < min_loss:
         min_loss = loss
-        agent.model.save("dqn_model_5.keras")
+        agent.model.save(MODEL_FILE)
 
     if episode % 50 == 0:
         training_data = {
@@ -252,13 +256,13 @@ for episode in range(EPISODES):
             "losses": losses,
             "steps_per_game": steps_per_game,
         }
-        agent.model.save("dqn_model_5.keras")
+        agent.model.save(MODEL_FILE)
         min_loss = loss
 
-        with open("training_data_5_2.pkl", "wb") as f:
+        with open(DATA_FILE, "wb") as f:
             pickle.dump(training_data, f)
 
-agent.model.save("dqn_model_5.keras")
+agent.model.save(MODEL_FILE)
 
 print("Training complete. Model saved!")
 
@@ -274,7 +278,7 @@ training_data = {
 }
 
 # Save to a pickle file
-with open("training_data_5_2.pkl", "wb") as f:
+with open(DATA_FILE, "wb") as f:
     pickle.dump(training_data, f)
 
 
