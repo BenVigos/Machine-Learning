@@ -67,7 +67,108 @@ class Player(player.Player):
     def update_target(self):
         self.target.set_weights(self.model.get_weights())
 
+
     def replay(self):
+        if len(self.memory) < self.batch_size:
+            return
+
+        minibatch = random.sample(self.memory, self.batch_size)
+
+        local_inputs = []
+        action_indices = []
+        rewards = []
+        next_state_inputs = []
+        mask_list = []
+        map_current_to_future = []
+
+        for (grid, state, action, reward, next_state, done, valid_actions_next) in minibatch:
+            if action is None:
+                continue
+
+            from_player = state.player
+            from_area, to_area = action
+
+            local_input, valid_targets = self.get_local_features(grid, state, from_player, from_area)
+            if to_area not in valid_targets:
+                continue
+
+            action_idx = valid_targets.index(to_area)
+
+            # Save input and action
+            local_inputs.append(local_input)
+            action_indices.append(action_idx)
+            rewards.append(reward)
+
+            # Process next state (batch later)
+            if not done:
+                next_inputs_per_sample = []
+                masks_per_sample = []
+                for a in valid_actions_next:
+                    if a is None:
+                        continue
+                    next_from, _ = a
+                    next_input, valid_targets_next = self.get_local_features(grid, next_state, from_player, next_from)
+                    mask = [i for i, tgt in enumerate(valid_targets_next) if tgt is not None]
+                    if mask:
+                        next_inputs_per_sample.append(next_input)
+                        masks_per_sample.append(mask)
+
+                if next_inputs_per_sample:
+                    next_state_inputs.extend(next_inputs_per_sample)
+                    mask_list.extend(masks_per_sample)
+                    map_current_to_future.append(len(next_inputs_per_sample))
+                else:
+                    map_current_to_future.append(0)
+            else:
+                map_current_to_future.append(0)
+
+        if not local_inputs:
+            return
+
+        local_inputs = np.array(local_inputs)
+        action_indices = np.array(action_indices)
+        rewards = np.array(rewards)
+
+        # Batched prediction
+        predicted_q_values = self.model.predict(local_inputs, verbose=0)
+
+        if next_state_inputs:
+            future_preds = self.target.predict(np.array(next_state_inputs), verbose=0)
+        else:
+            future_preds = []
+
+        # Calculate target Q values
+        targets = np.copy(predicted_q_values)
+        pred_ptr = 0
+        for i in range(len(local_inputs)):
+            if map_current_to_future[i] > 0:
+                sample_preds = future_preds[pred_ptr: pred_ptr + map_current_to_future[i]]
+                sample_masks = mask_list[pred_ptr: pred_ptr + map_current_to_future[i]]
+                masked_max_qs = [np.max(pred[m]) for pred, m in zip(sample_preds, sample_masks)]
+                max_future_q = max(masked_max_qs)
+                pred_ptr += map_current_to_future[i]
+                targets[i, action_indices[i]] = rewards[i] + self.gamma * max_future_q
+            else:
+                targets[i, action_indices[i]] = rewards[i]
+
+        # Convert to tensors for training
+        local_inputs_tf = tf.convert_to_tensor(local_inputs, dtype=tf.float32)
+        targets_tf = tf.convert_to_tensor(targets, dtype=tf.float32)
+
+        with tf.GradientTape() as tape:
+            predictions = self.model(local_inputs_tf, training=True)
+            loss = tf.keras.losses.Huber()(targets_tf, predictions)
+
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+        return loss.numpy()
+
+
+    def replay_(self):
         if len(self.memory) < self.batch_size:
             return
 

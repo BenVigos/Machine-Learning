@@ -92,15 +92,15 @@ losses = []
 
 # Hyperparameters
 GAMMA = 0.95
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
-BATCH_SIZE = 16
-EPISODES = 5000
-EPSILON = 0  # Exploration factor
+BATCH_SIZE = 32
+EPISODES = 100
+EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.99995
-TRAIN_AFTER_ACTIONS = 50
-UPDATE_TARGET = 5000
+EPSILON_DECAY = 0.99
+TRAIN_AFTER_ACTIONS = 16
+UPDATE_TARGET = 1000
 MAX_STEPS = np.inf
 steps = 0
 
@@ -199,7 +199,7 @@ for episode in range(EPISODES):
                 if loss is not None:
                     total_loss += loss
                     losses.append(loss)
-                    if len(losses) % 2 == 0:
+                    if len(losses) % 20 == 0:
                         update_plot(losses)
 
             if steps % UPDATE_TARGET == 0:
