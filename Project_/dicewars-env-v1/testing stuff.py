@@ -94,12 +94,12 @@ losses = []
 GAMMA = 0.95
 LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 EPISODES = 100
 EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.99
-TRAIN_AFTER_ACTIONS = 16
+EPSILON_DECAY = 0.99995
+TRAIN_AFTER_ACTIONS = 10
 UPDATE_TARGET = 1000
 MAX_STEPS = np.inf
 steps = 0
@@ -199,7 +199,7 @@ for episode in range(EPISODES):
                 if loss is not None:
                     total_loss += loss
                     losses.append(loss)
-                    if len(losses) % 20 == 0:
+                    if len(losses) % 10 == 0:
                         update_plot(losses)
 
             if steps % UPDATE_TARGET == 0:
@@ -224,11 +224,11 @@ for episode in range(EPISODES):
     print(
         f"Episode {episode + 1}/{EPISODES} - Epsilon: {agent.epsilon:.2f} \n Reward: {total_reward} | Steps {steps} \n")
 
-    if episode % 50 == 0:
-        # win_rate = test_agent(num_games=1, game = game)
-        win_rate = 0
-        print(f"TEST: Win rate {win_rate}")
-        testing_history.append(win_rate)
+    # if episode % 50 == 0:
+        # win_rate = test_agent(num_games=10, game = game)
+        #
+        # print(f"TEST: Win rate {win_rate}")
+        # testing_history.append(win_rate)
 
     SCALE *= DIM_FACTOR
 
