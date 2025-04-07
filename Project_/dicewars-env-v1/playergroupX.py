@@ -281,6 +281,5 @@ class Player(player.Player):
         if new_state.winner == player and player != -1:
             reward += 1
 
-
         return reward
     
