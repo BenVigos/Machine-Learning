@@ -87,19 +87,16 @@ losses = []
 #         adj_fig.canvas.flush_events()
 
 
-
-
-
 # Hyperparameters
 GAMMA = 0.95
 LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 EPISODES = 100
 EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.99995
-TRAIN_AFTER_ACTIONS = 10
+EPSILON_DECAY = 0.999999
+TRAIN_AFTER_ACTIONS = 4
 UPDATE_TARGET = 1000
 MAX_STEPS = np.inf
 steps = 0
@@ -199,7 +196,7 @@ for episode in range(EPISODES):
                 if loss is not None:
                     total_loss += loss
                     losses.append(loss)
-                    if len(losses) % 10 == 0:
+                    if len(losses) % 25 == 0:
                         update_plot(losses)
 
             if steps % UPDATE_TARGET == 0:
