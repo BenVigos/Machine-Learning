@@ -11,7 +11,7 @@ from collections import deque
 
 class Player(player.Player):
     def __init__(self, state_size = 22, action_size=10, MEMORY_SIZE=10000, EPSILON=1.0, LEARNING_RATE=1e-3,
-                 BATCH_SIZE=64, GAMMA=0.99, EPSILON_MIN=0.01, EPSILON_DECAY=0.995, model=None):
+                 BATCH_SIZE=64, GAMMA=0.99, EPSILON_MIN=0.01, EPSILON_DECAY=0.99, model=None):
 
         self.playername = 'Group X - Local'
         print(f'Initializing player with local representation: {__file__}')
@@ -34,8 +34,8 @@ class Player(player.Player):
 
     def build_model(self):
         model = Sequential([
-            Dense(32, activation="relu", input_shape=(self.state_size,)),
-            Dense(32, activation="relu"),
+            Dense(64, activation="relu", input_shape=(self.state_size,)),
+            #Dense(32, activation="relu"),
             Dense(self.action_size, activation="linear")
         ])
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
@@ -163,7 +163,7 @@ class Player(player.Player):
         self.model.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
         if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+            self.epsilon -= self.epsilon_decay
 
         return loss.numpy()
 
@@ -317,17 +317,26 @@ class Player(player.Player):
         old_num_adjacent = old_state.player_max_size[player]
         new_player_areas = new_state.player_areas
         old_player_areas = old_state.player_areas
+        new_num_dice_per_area = new_state.area_num_dice
 
         reward = 0
+        # Reward for more adjacent fields 
         if new_num_adjacent > old_num_adjacent:
             reward += 0.01 * (new_num_adjacent - old_num_adjacent)
 
+        # Reward for eliminating the opponent
         for i in range(len(new_state.player_num_dice)):
             if i != player and len(new_player_areas[i]) == 0 and len(old_player_areas[i]) != 0:
                 reward += 0.2 * scale
 
+        # Reward for surviving
         if new_dice > 0:
-            reward += 0.01
+            reward += 0.005
+
+        # Reward for each territory with more than 1 dice 
+        for element in new_num_dice_per_area:
+            if element > 1:
+                reward += 0.005
 
         if new_state.winner == player and player != -1:
             reward += 1

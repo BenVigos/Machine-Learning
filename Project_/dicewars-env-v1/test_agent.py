@@ -42,8 +42,8 @@ def test_agent(num_games, game=None, RENDER = False):
     return wins/num_games
 
 
-agent = Player(EPSILON=0, EPSILON_MIN=0, model="Project_/dicewars-env-v1/dqn_model_4.keras")  # Our DQN player
+agent = Player(EPSILON=0, EPSILON_MIN=0, model="Project_/dicewars-env-v1/dqn_model_1_hidden_layer-64-500_lower_eps.keras")  # Our DQN player
 players = [agent, RandomPlayer(), RandomPlayer(), RandomPlayer()]
 
-stat = test_agent(num_games=100, RENDER=False)
+stat = test_agent(num_games=50, RENDER=True)
 print(stat)

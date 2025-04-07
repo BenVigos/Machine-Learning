@@ -92,10 +92,10 @@ GAMMA = 0.95
 LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
 BATCH_SIZE = 32
-EPISODES = 100
-EPSILON = 0  # Exploration factor
+EPISODES = 500
+EPSILON = 1  # Exploration factor
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.999999
+EPSILON_DECAY = 0.0007
 TRAIN_AFTER_ACTIONS = 4
 UPDATE_TARGET = 1000
 MAX_STEPS = np.inf
@@ -123,7 +123,7 @@ action_size = 10  # Assuming all possible (from, to) moves
 
 agent = Player(state_size=state_size, action_size=action_size, MEMORY_SIZE=MEMORY_SIZE, EPSILON=EPSILON,
                LEARNING_RATE=LEARNING_RATE, BATCH_SIZE=BATCH_SIZE, GAMMA=GAMMA, EPSILON_MIN=EPSILON_MIN,
-               EPSILON_DECAY=EPSILON_DECAY)  # Our DQN player
+               EPSILON_DECAY=EPSILON_DECAY, model="Project_/dicewars-env-v1/dqn_model_1_hidden_layer-64-500episodes.keras") # Our DQN player
 players = [agent, RandomPlayer(), RandomPlayer(), RandomPlayer()]
 
 
@@ -229,7 +229,7 @@ for episode in range(EPISODES):
 
     SCALE *= DIM_FACTOR
 
-agent.model.save("dqn_model_1_hidden_layer-64.keras")
+agent.model.save("dqn_model_1_hidden_layer-64-500episodes_v3.keras")
 
 print("Training complete. Model saved!")
 
@@ -244,7 +244,7 @@ training_data = {
 }
 
 # Save to a pickle file
-with open("training_data_4.pkl", "wb") as f:
+with open("training_data_1_hidden_layer-64-500episodes_v3.pkl", "wb") as f:
     pickle.dump(training_data, f)
 
 
