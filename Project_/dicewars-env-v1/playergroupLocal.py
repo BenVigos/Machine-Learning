@@ -1,31 +1,20 @@
 import tensorflow as tf
 import keras.src.saving.saving_lib
 from dicewars import player
-from random import choice
-
 import random
 import numpy as np
-from keras.layers import Dense
+from keras.layers import Dense, Input
+from keras.models import Model
 from keras.optimizers import Adam
 from collections import deque
 
 
 class Player(player.Player):
-    """
-    Modify the get_attack_areas function using your own player.
+    def __init__(self, state_size = 22, action_size=10, MEMORY_SIZE=10000, EPSILON=1.0, LEARNING_RATE=1e-3,
+                 BATCH_SIZE=64, GAMMA=0.99, EPSILON_MIN=0.01, EPSILON_DECAY=0.995, model=None):
 
-    An example of a player which plays random moves is implemented here
-    """
-
-    def __init__(self, state_size=None, action_size=None, MEMORY_SIZE=1, EPSILON=0, LEARNING_RATE=1e-9, BATCH_SIZE=32,
-                 GAMMA=0, EPSILON_MIN=0, EPSILON_DECAY=0, model=None):
-        """
-        do all required initialization here 
-        use relative paths for access to stored files that you require
-        use self.variable to store your variables such that your class has access.
-        """
-        self.playername = 'Group X'
-        print(f'Initializing player from: {__file__} with name:', self.playername)
+        self.playername = 'Group X - Local'
+        print(f'Initializing player with local representation: {__file__}')
 
         self.state_size = state_size
         self.action_size = action_size
@@ -38,217 +27,189 @@ class Player(player.Player):
         self.epsilon_decay = EPSILON_DECAY
         self.target = self.build_model()
 
-        if model == None:
+        if model is None:
             self.model = self.build_model()
         else:
             self.model = keras.src.saving.saving_lib.load_model(model)
 
     def build_model(self):
-        """
-        Create a simple neural network for DQN.
-        """
-        model = keras.Sequential([
-            Dense(64, input_dim=self.state_size, activation="relu"),
-            Dense(64, activation="relu"),
-            Dense(self.action_size, activation="linear")
-        ])
+        inputs = Input(shape=(self.state_size,))
+        x = Dense(64, activation="relu")(inputs)
+        x = Dense(64, activation="relu")(x)
+        outputs = Dense(self.action_size, activation="linear")(x)
+        model = Model(inputs, outputs)
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
         model.summary()
         return model
 
-    def remember(self, grid, state, action, reward, next_state, done, valid_actions_next):
-        """
-         Store experience in memory.
-          """
-        from_player = state.player
-        self.memory.append((self.better_state(grid, state, from_player), action, reward,
-                            self.better_state(grid, next_state, from_player), done, valid_actions_next))
+    def get_local_features(self, grid, match_state, from_player, area_idx, max_neighbors=10):
+        dice = match_state.area_num_dice[area_idx]
+        owner_flag = 1 if match_state.area_players[area_idx] == from_player else -1
+        neighbors = grid.areas[area_idx].neighbors
+        neighbor_data = []
 
+        valid_targets = []
+        for n in sorted(neighbors, key=lambda x: -match_state.area_num_dice[x])[:max_neighbors]:
+            n_owner = 1 if match_state.area_players[n] == from_player else -1
+            n_dice = match_state.area_num_dice[n]
+            neighbor_data.extend([n_owner, n_dice])
+            valid_targets.append(n if n_owner == -1 else None)  # only enemies are valid targets
+
+        while len(neighbor_data) < max_neighbors * 2:
+            neighbor_data.extend([0, 0])
+            valid_targets.append(None)
+
+        return np.array([dice, owner_flag] + neighbor_data, dtype=np.float32), valid_targets
+
+    def remember(self, grid, state, action, reward, next_state, done, valid_actions_next):
+        self.memory.append((grid, state, action, reward, next_state, done, valid_actions_next))
 
     def update_target(self):
         self.target.set_weights(self.model.get_weights())
 
     def replay(self):
-        """ Train the model using replay memory. """
         if len(self.memory) < self.batch_size:
             return
 
-        losses = []
-
         minibatch = random.sample(self.memory, self.batch_size)
 
-        # Unpack batch elements
-        states = np.array([x[0] for x in minibatch])
-        actions = np.array([self.action_to_idx(x[1]) for x in minibatch])
-        rewards = np.array([x[2] for x in minibatch], dtype=np.float32)
-        next_states = np.array([x[3] for x in minibatch])
-        dones = np.array([x[4] for x in minibatch], dtype=np.float32)
-        dones = dones != -1 #this should also include whether player has been eliminated?
-        valid_actions_next = [x[5] for x in minibatch]  # list of lists
+        local_inputs = []
+        target_qs = []
 
-        # Predict future rewards from target network
-        future_rewards = self.target.predict(next_states, verbose=0)
+        # To batch predict all next-state Q-values in one go
+        all_next_inputs = []
+        all_masks = []
+        idx_mapping = []
 
-        # Apply action masking
-        masked_future_rewards = np.full_like(future_rewards, -np.inf)
-        for i in range(self.batch_size):
-            valid_idxs = self.actions_to_idxs(valid_actions_next[i])
-            masked_future_rewards[i, valid_idxs] = future_rewards[i, valid_idxs]
+        for idx, (grid, state, action, reward, next_state, done, valid_actions_next) in enumerate(minibatch):
+            if action is None:
+                continue
 
-        max_next_qs = np.max(masked_future_rewards, axis=1)
+            from_player = state.player
+            from_area, to_area = action
 
-        # Compute Q values: Q = reward + gamma * max(Q_next) and set to -1 if done
-        updated_qs = rewards + self.gamma * max_next_qs * (1 - dones)
+            local_input, valid_targets = self.get_local_features(grid, state, from_player, from_area)
+            if to_area not in valid_targets:
+                continue
 
-        # Predict current Q-values
+            action_idx = valid_targets.index(to_area)
+
+            next_inputs = []
+            next_masks = []
+            for a in valid_actions_next:
+                if a is None:
+                    continue
+                next_from, _ = a
+                ni, vt = self.get_local_features(grid, next_state, from_player, next_from)
+                mask = [i for i, tgt in enumerate(vt) if tgt is not None]
+                if mask:
+                    next_inputs.append(ni)
+                    next_masks.append(mask)
+
+            if not done and next_inputs:
+                all_next_inputs.extend(next_inputs)
+                all_masks.extend(next_masks)
+                idx_mapping.append((len(local_inputs), len(next_inputs)))  # map to where this sample's future preds will be
+            else:
+                idx_mapping.append((len(local_inputs), 0))
+
+            local_inputs.append(local_input)
+            target_qs.append((action_idx, reward))
+
+        if not local_inputs:
+            return
+
+        future_preds = self.target.predict(np.array(all_next_inputs), verbose=0) if all_next_inputs else []
+
+        targets = []
+        pred_index = 0
+        for i, (local_input, (action_idx, reward)) in enumerate(zip(local_inputs, target_qs)):
+            target_q_vec = self.model.predict(np.array([local_input]), verbose=0)[0]
+            _, n_inputs = idx_mapping[i]
+
+            if n_inputs > 0:
+                sample_future_preds = future_preds[pred_index:pred_index + n_inputs]
+                sample_masks = all_masks[pred_index:pred_index + n_inputs]
+                masked_max_qs = [np.max(p[m]) for p, m in zip(sample_future_preds, sample_masks)]
+                max_future_q = max(masked_max_qs)
+                target_q = reward + self.gamma * max_future_q
+                pred_index += n_inputs
+            else:
+                target_q = reward
+
+            target_q_vec[action_idx] = target_q
+            targets.append(target_q_vec)
+
+        local_inputs = np.array(local_inputs)
+        target_qs = np.array(targets)
+
         with tf.GradientTape() as tape:
-            q_values = self.model(states, training=True)
+            predictions = self.model(local_inputs, training=True)
+            loss = tf.keras.losses.Huber()(target_qs, predictions)
 
-            # Get Q-values for actions taken using one-hot masking
-            action_masks = tf.one_hot(actions, self.action_size)
-            q_action = tf.reduce_sum(q_values * action_masks, axis=1)
-
-            # Compute loss
-            loss = tf.keras.losses.Huber()(updated_qs, q_action)
-
-        # Backpropagation
         gradients = tape.gradient(loss, self.model.trainable_variables)
         self.model.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
-        # Epsilon decay
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-        return tf.reduce_mean(loss).numpy()
+        return loss.numpy()
 
     def get_valid_actions(self, grid, match_state):
-        """
-        REWRITE THIS FUNCTION FOR YOUR OWN MACHINE LEARNING AGENT
-        """
-        from_player = match_state.player  # the index of the current player
-        player_areas = match_state.player_areas  # the areas belonging to each player
-        area_num_dice = match_state.area_num_dice  # the amount of dice on each area
-
-        # add ending the turn to the list of possibilities
+        from_player = match_state.player
+        player_areas = match_state.player_areas[from_player]
+        area_num_dice = match_state.area_num_dice
         possible_attacks = [None]
 
-        # loop over all areas in posession of the current player
-        for from_area in player_areas[from_player]:
-
-            # check if the area has more than 1 dice
+        for from_area in player_areas:
             if area_num_dice[from_area] > 1:
-
-                # loops over all neigbors of the current area
                 for to_area in grid.areas[from_area].neighbors:
-                    # check if the neigboring area is not your own
-                    if to_area not in player_areas[from_player]:
-                        # append the area to the possible attack options
+                    if to_area not in player_areas:
                         possible_attacks.append((from_area, to_area))
-
         return possible_attacks
 
     def get_attack_areas(self, grid, match_state):
-        """ Select an action using epsilon-greedy strategy with action masking. """
+        from_player = match_state.player
+        player_areas = match_state.player_areas[from_player]
+        area_num_dice = match_state.area_num_dice
 
-        valid_actions = self.get_valid_actions(grid, match_state)
         if np.random.rand() <= self.epsilon:
-            return random.choice(valid_actions)
+            return random.choice(self.get_valid_actions(grid, match_state))
 
-        match_state = self.better_state(grid, match_state, match_state.player)
+        # Prepare batch input
+        inputs = []
+        area_refs = []
 
-        q_values = self.model.predict(np.array([match_state]), verbose=0)[0]
-        masked_q_values = np.full(self.action_size, -np.inf)
-        action_indices = [valid_actions.index(a) for a in valid_actions]
-        masked_q_values[action_indices] = q_values[action_indices]
+        for from_area in player_areas:
+            if area_num_dice[from_area] <= 1:
+                continue
+            local_input, valid_targets = self.get_local_features(grid, match_state, from_player, from_area)
+            inputs.append(local_input)
+            area_refs.append((from_area, valid_targets))
 
-        return valid_actions[np.argmax(masked_q_values)]
+        if not inputs:
+            return None
 
-    def simple_state(self, match_state, from_player):
-        """
-        Simple state representation. Only shows the total # of dice per player.
-        "My" dice always go first and the rest are ranked from least to most
-        """
-        num_dice = match_state.player_num_dice
-        my_dice = num_dice[from_player]
-        others = np.delete(np.array(num_dice), from_player)
-        others = np.sort(others)
-        state = np.insert(others, 0, my_dice)
+        inputs = np.array(inputs)
+        q_values_batch = self.model.predict(inputs, verbose=0)
 
-        return state
+        best_q = -np.inf
+        best_action = None
 
-    def better_state(self, grid, match_state, from_player, max_neighbors=5):
-        import numpy as np
+        for i, (from_area, valid_targets) in enumerate(area_refs):
+            q_values = q_values_batch[i]
+            for j, to_area in enumerate(valid_targets):
+                if to_area is not None and q_values[j] > best_q:
+                    best_q = q_values[j]
+                    best_action = (from_area, to_area)
 
-        num_areas = len(match_state.area_players)
-        area_dice = match_state.area_num_dice
-        area_owners = match_state.area_players
-
-        # Step 1: Build raw feature list before sorting
-        raw_features = []
-
-        for area_idx in range(num_areas):
-            owner_flag = 1 if area_owners[area_idx] == from_player else -1
-            neighbors = grid.areas[area_idx].neighbors
-            sorted_neighbors = sorted(neighbors, key=lambda x: -area_dice[x])
-
-            # Pad neighbors with -1
-            padded_neighbors = sorted_neighbors[:max_neighbors]
-            while len(padded_neighbors) < max_neighbors:
-                padded_neighbors.append(-1)
-
-            raw_features.append({
-                "original_idx": area_idx,
-                "dice": area_dice[area_idx],
-                "owner": owner_flag,
-                "neighbors": padded_neighbors
-            })
-
-        # Step 2: Sort features and create new index mapping
-        sorted_features = sorted(raw_features, key=lambda x: (-x["owner"], -x["dice"]))
-        index_map = {feat["original_idx"]: i for i, feat in enumerate(sorted_features)}
-
-        # Step 3: Remap neighbors to new sorted indices
-        area_vector_list = []
-        for feat in sorted_features:
-            remapped_neighbors = [
-                index_map[n] if n in index_map else -1 for n in feat["neighbors"]
-            ]
-            area_vector_list.append([
-                feat["dice"],
-                feat["owner"],
-                *remapped_neighbors
-            ])
-
-        # Step 4: Flatten to 1D array
-        return np.array(area_vector_list, dtype=np.float32).flatten()
+        return best_action if best_action is not None else None
 
     def action_to_idx(self, action):
-        if action == None:
-            return 0
-        else:
-            return action[0] * 30 + action[1]
+        return 0 if action is None else 1
 
-    def actions_to_idxs(self, valid_actions_next):
-        idxs = []
-        for i in range(len(valid_actions_next)):
-            idxs.append(self.action_to_idx(valid_actions_next[i]))
-
-        return idxs
-
-    def reward_state_old(self, old_state, new_state):
-        reward = -0.1
-        # player = old_state.player
-        # old_dice = old_state.player_num_dice[player]
-        # new_dice = new_state.player_num_dice[player]
-        # reward += new_dice - old_dice
-        #
-        # if new_state.winner == player and player != -1:
-        #     reward += 50
-        #     print("Victory!")
-        return reward
-
-    def reward_state(self, old_state, new_state, scale = 1):
-        player = old_state.player  # bc after you take an action it's not your turn anymore
+    def reward_state(self, old_state, new_state, scale=1):
+        player = old_state.player
         old_dice = old_state.player_num_dice[player]
         new_dice = new_state.player_num_dice[player]
         new_num_adjacent = new_state.player_max_size[player]
@@ -256,30 +217,18 @@ class Player(player.Player):
         new_player_areas = new_state.player_areas
         old_player_areas = old_state.player_areas
 
-
-        diminishing_factor = 1   # for now don't decrease with time
         reward = 0
+        if new_num_adjacent > old_num_adjacent:
+            reward += 0.01 * (new_num_adjacent - old_num_adjacent)
 
-        # Check if the new field increases the player's adjacent 
-        if new_num_adjacent > old_num_adjacent:  
-            reward += 0.01 * (new_num_adjacent - old_num_adjacent) * diminishing_factor  # Extra reward for forming larger groups
-
-        # Check if you've eliminated an opponent (# of fields was not 0 and now is 0)
         for i in range(len(new_state.player_num_dice)):
-            if i != player: 
-                if len(new_player_areas[i]) == 0 and len(old_player_areas[i]) != 0:
-                    reward += 0.2 * scale
-
-        # Check for the average number of dice per area
-        reward += (new_dice / len(new_player_areas[player])) * 0.02
-
+            if i != player and len(new_player_areas[i]) == 0 and len(old_player_areas[i]) != 0:
+                reward += 0.2 * scale
 
         if new_dice > 0:
             reward += 0.01
 
-        
         if new_state.winner == player and player != -1:
             reward += 1
 
         return reward
-    
