@@ -96,7 +96,7 @@ LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
 BATCH_SIZE = 64
 EPISODES = 100
-EPSILON = 1  # Exploration factor
+EPSILON = 0  # Exploration factor
 EPSILON_MIN = 0.01
 EPSILON_DECAY = 0.99995
 TRAIN_AFTER_ACTIONS = 10
@@ -232,7 +232,7 @@ for episode in range(EPISODES):
 
     SCALE *= DIM_FACTOR
 
-agent.model.save("dqn_model_4.keras")
+agent.model.save("dqn_model_1_hidden_layer-64.keras")
 
 print("Training complete. Model saved!")
 

@@ -4,7 +4,7 @@ from dicewars import player
 import random
 import numpy as np
 from keras.layers import Dense, Input
-from keras.models import Model
+from keras.models import Model, Sequential
 from keras.optimizers import Adam
 from collections import deque
 
@@ -33,11 +33,11 @@ class Player(player.Player):
             self.model = keras.src.saving.saving_lib.load_model(model)
 
     def build_model(self):
-        inputs = Input(shape=(self.state_size,))
-        x = Dense(64, activation="relu")(inputs)
-        x = Dense(64, activation="relu")(x)
-        outputs = Dense(self.action_size, activation="linear")(x)
-        model = Model(inputs, outputs)
+        model = Sequential([
+            Dense(32, activation="relu", input_shape=(self.state_size,)),
+            Dense(32, activation="relu"),
+            Dense(self.action_size, activation="linear")
+        ])
         model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
         model.summary()
         return model
