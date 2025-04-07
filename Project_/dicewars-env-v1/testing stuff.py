@@ -107,11 +107,17 @@ DIM_FACTOR = 1
 
 RENDER = False
 
+MODEL_NAME = input("Please specify model name: ")
+MODEL_FILE = f"{MODEL_NAME}.keras"
+DATA_FILE = f"training_data_{MODEL_NAME}.pkl"
+
 game_history = []
 reward_history = []
 loss_history = []
 victory_history = []
 testing_history = []
+steps_per_game = []
+
 
 
 # Training loop
@@ -126,6 +132,8 @@ agent = Player(state_size=state_size, action_size=action_size, MEMORY_SIZE=MEMOR
                EPSILON_DECAY=EPSILON_DECAY, model="Project_/dicewars-env-v1/dqn_model_1_hidden_layer-64-500episodes.keras") # Our DQN player
 players = [agent, RandomPlayer(), RandomPlayer(), RandomPlayer()]
 
+
+min_loss = np.inf
 
 def test_agent(num_games, game=None, RENDER = False):
     wins = 0
@@ -159,6 +167,7 @@ def test_agent(num_games, game=None, RENDER = False):
 
 
 for episode in range(EPISODES):
+    # game = Game(num_seats=4)
     match = Match(game)
     player = match.player
     state = match.state
@@ -166,6 +175,8 @@ for episode in range(EPISODES):
 
     total_reward = 0
     total_loss = 0
+
+    start = steps
 
     if steps >= MAX_STEPS:
         break
@@ -217,6 +228,7 @@ for episode in range(EPISODES):
     reward_history.append(total_reward)
     game_history.append(match)
     loss_history.append(total_loss/(steps/TRAIN_AFTER_ACTIONS))
+    steps_per_game.append(steps-start)
 
     print(
         f"Episode {episode + 1}/{EPISODES} - Epsilon: {agent.epsilon:.2f} \n Reward: {total_reward} | Steps {steps} \n")
@@ -229,7 +241,28 @@ for episode in range(EPISODES):
 
     SCALE *= DIM_FACTOR
 
-agent.model.save("dqn_model_1_hidden_layer-64-500episodes_v3.keras")
+
+    if loss < min_loss:
+        min_loss = loss
+        agent.model.save(MODEL_FILE)
+
+    if episode % 50 == 0:
+        training_data = {
+            "game_history": game_history,
+            "reward_history": reward_history,
+            "loss_history": loss_history,
+            "victory_history": victory_history,
+            "testing_history": testing_history,
+            "losses": losses,
+            "steps_per_game": steps_per_game,
+        }
+        agent.model.save(MODEL_FILE)
+        min_loss = loss
+
+        with open(DATA_FILE, "wb") as f:
+            pickle.dump(training_data, f)
+
+agent.model.save(MODEL_FILE)
 
 print("Training complete. Model saved!")
 
@@ -241,10 +274,11 @@ training_data = {
     "victory_history": victory_history,
     "testing_history": testing_history,
     "losses": losses,
+    "steps_per_game": steps_per_game,
 }
 
 # Save to a pickle file
-with open("training_data_1_hidden_layer-64-500episodes_v3.pkl", "wb") as f:
+with open(DATA_FILE, "wb") as f:
     pickle.dump(training_data, f)
 
 
