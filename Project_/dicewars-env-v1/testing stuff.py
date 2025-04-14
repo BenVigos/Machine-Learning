@@ -93,8 +93,8 @@ LEARNING_RATE = 0.01
 MEMORY_SIZE = 10000
 BATCH_SIZE = 32
 EPISODES = 500
-EPSILON = 1  # Exploration factor
-EPSILON_MIN = 0.01
+EPSILON = 0.3  # Exploration factor
+EPSILON_MIN = 0.1
 EPSILON_DECAY = 0.0007
 TRAIN_AFTER_ACTIONS = 4
 UPDATE_TARGET = 1000
@@ -129,7 +129,7 @@ action_size = 10  # Assuming all possible (from, to) moves
 
 agent = Player(state_size=state_size, action_size=action_size, MEMORY_SIZE=MEMORY_SIZE, EPSILON=EPSILON,
                LEARNING_RATE=LEARNING_RATE, BATCH_SIZE=BATCH_SIZE, GAMMA=GAMMA, EPSILON_MIN=EPSILON_MIN,
-               EPSILON_DECAY=EPSILON_DECAY, model="Project_/dicewars-env-v1/dqn_model_1_hidden_layer-64-500episodes.keras") # Our DQN player
+               EPSILON_DECAY=EPSILON_DECAY, model="Project_/dicewars-env-v1/dqn_model_1_hidden_layer-64-500_lower_eps.keras") # Our DQN player
 players = [agent, RandomPlayer(), RandomPlayer(), RandomPlayer()]
 
 
